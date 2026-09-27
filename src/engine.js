@@ -207,14 +207,7 @@ export function applySession(profile, { lesson, answers, spelledIds = [], now = 
   };
 
   const before = levelInfo(profile.level);
-  const ready = levelMastery(next);
   let leveledUp = false;
-
-  if (promotes && profile.level < 4 && ready.total > 0 && ready.known === ready.total) {
-    next.level += 1;
-    next.ease = false;
-    leveledUp = true;
-  }
 
   session.levelAfter = next.level;
   next.sessions = [...next.sessions, session];
@@ -258,10 +251,24 @@ function progressNote(profile, { leveledUp }) {
 function masterySentence(profile) {
   const mastery = levelMastery(profile);
   const info = levelInfo(profile.level);
-  if (profile.level >= 4 && mastery.total > 0 && mastery.known === mastery.total) {
+  if (mastery.total > 0 && mastery.known === mastery.total) {
     return `All ${mastery.total} ${info.de} lines.`;
   }
   return `${mastery.known} of ${mastery.total} ${info.de} lines.`;
+}
+
+export function learnedWords(profile) {
+  const seen = new Set();
+  for (const scene of scenes) {
+    for (const phrase of scene.phrases) {
+      if (!isKnown(profile, phrase.id)) continue;
+      const tokens = phrase.de.toLocaleLowerCase("de").match(/[a-zäöüß]+/g) || [];
+      for (const token of tokens) {
+        if (token.length >= 3) seen.add(token);
+      }
+    }
+  }
+  return [...seen].sort((a, b) => a.localeCompare(b, "de"));
 }
 
 export function homeNote(profile) {

@@ -1,4 +1,4 @@
-import { extraScenes } from "./extra-scenes.js";
+import { a1Scenes } from "./a1/course.js";
 
 /** Everyday scenes. Each one is a single counter, call, or conversation — five lines. */
 const coreScenes = [
@@ -2198,32 +2198,14 @@ const coreScenes = [
   },
 ];
 
-export const scenes = [...coreScenes, ...extraScenes];
+export const scenes = a1Scenes;
 
 export const LEVELS = [
   {
     id: 1,
     de: "A1",
-    en: "Simple daily needs",
-    can: "Greet people, order, pay, and ask where something is.",
-  },
-  {
-    id: 2,
-    de: "A2",
-    en: "Routine errands",
-    can: "Get around, handle a short counter exchange, and ask for a time.",
-  },
-  {
-    id: 3,
-    de: "B1",
-    en: "Real situations",
-    can: "Explain a problem, keep a conversation going, and deal with a delay or a doctor.",
-  },
-  {
-    id: 4,
-    de: "B2",
-    en: "Ordinary nuance",
-    can: "Soften a request, fix a mix-up, and say what you mean without raising your voice.",
+    en: "Start Deutsch 1",
+    can: "You are building German you can use in real life. One scene at a time is enough, and each one counts.",
   },
 ];
 

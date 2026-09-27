@@ -3,10 +3,12 @@ import {
   buildLesson,
   homeNote,
   learnedScenes,
+  learnedWords,
   levelInfo,
+  levelMastery,
   localDay,
+  scenes,
   weekRecord,
-  LEVELS,
   placementItems,
   scorePlacement,
   shakyPhrase,
@@ -81,9 +83,16 @@ function settleStudy(current) {
   return { ...current, studyStartedAt: new Date().toISOString() };
 }
 
+function lessonIsCurrent(lesson) {
+  const id = lesson?.sceneId;
+  return Boolean(id && scenes.some((scene) => scene.id === id));
+}
+
 function normalize(current) {
   let next = { ...current };
-  if (next.level > 4) next.level = 4;
+  if (next.level > 1) next.level = 1;
+  if (next.queued && !lessonIsCurrent(next.queued)) next.queued = null;
+  if (next.active && !lessonIsCurrent(next.active.lesson)) next.active = null;
   next = seedMinutes(next);
   if (next.level && next.screen === "welcome") next.screen = "home";
   if (next.screen === "lesson" && !next.active) next.screen = "home";
@@ -272,23 +281,19 @@ function levelPanel(current) {
   return `<aside class="card compact">
     <div class="compact-head">
       <p class="kicker">Level</p>
-      <p><strong>${esc(info.de)}</strong> · ${esc(homeNote(current))}</p>
     </div>
-    <ol class="bands">
-      ${LEVELS.map(
-        (level) => `<li class="${level.id === current.level ? "is-now" : level.id < current.level ? "is-behind" : ""}">${esc(level.de)}</li>`,
-      ).join("")}
-    </ol>
+    <h2>${esc(info.de)}</h2>
+    <p>${esc(info.can)}</p>
+    <p>${esc(homeNote(current))}</p>
     ${shakyBlock}
-    <button class="textish" type="button" data-action="retake">Check my level again</button>
   </aside>`;
 }
 
 function renderWelcome() {
   return shell(`<main>
     <h1>Alltag Deutsch</h1>
-    <p>A1 to B2. One scene at a time.</p>
-    <div class="actions"><button class="primary" type="button" data-action="start-placement">Find your level</button></div>
+    <p>A1, for an official test such as Start Deutsch 1. ${scenes.length} scenes, one at a time.</p>
+    <div class="actions"><button class="primary" type="button" data-action="start-course">Start</button></div>
   </main>`, { narrow: true });
 }
 
@@ -355,8 +360,15 @@ function minuteLabel(minutes) {
   return rounded > 0 ? `${rounded}m` : "–";
 }
 
-function weekBlock(current) {
+function minuteWords(minutes) {
+  return `${Math.round(minutes)} min`;
+}
+
+function progressBlock(current) {
   const week = weekRecord(current);
+  const today = week.days.find((day) => day.today);
+  const mastery = levelMastery(current);
+  const words = learnedWords(current);
   const days = week.days
     .map(
       (day) => `<li class="${day.minutes > 0 ? "has" : ""} ${day.today ? "today" : ""}">
@@ -365,13 +377,17 @@ function weekBlock(current) {
       </li>`,
     )
     .join("");
-  const total = Math.round(week.total);
   return `<section class="card compact week-card">
     <div class="compact-head">
-      <p class="kicker">This week</p>
-      <p>${total} min</p>
+      <p class="kicker">Progress</p>
     </div>
     <ol class="week">${days}</ol>
+    <ul class="meter">
+      <li><span>Today</span><strong>${minuteWords(today?.minutes || 0)}</strong></li>
+      <li><span>This week</span><strong>${minuteWords(week.total)}</strong></li>
+      <li><span>Scenes</span><strong>${mastery.scenesKnown} of ${mastery.scenesTotal}</strong></li>
+      <li><span>Words</span><strong>${words.length}</strong></li>
+    </ul>
   </section>`;
 }
 
@@ -388,7 +404,7 @@ function renderHome() {
         </div>
       </div>`
     : `<div class="footer-note"><button class="textish" type="button" data-action="reset-ask">Start over</button></div>`;
-  return shell(`<main class="home-grid">${levelPanel(profile)}${today}${weekBlock(profile)}${reset}</main>`, { narrow: true });
+  return shell(`<main class="home-grid">${levelPanel(profile)}${today}${progressBlock(profile)}${reset}</main>`, { narrow: true });
 }
 
 function lineReady(active, line) {
@@ -564,6 +580,15 @@ function renderResult() {
 
 function renderReview() {
   const learned = learnedScenes(profile);
+  const words = learnedWords(profile);
+  const mastery = levelMastery(profile);
+  const wordBlock = words.length
+    ? `<section class="card review-scene">
+        <h1>Words</h1>
+        <p>${words.length} from scenes you know.</p>
+        <p class="word-list" translate="no">${words.map((word) => esc(word)).join(" · ")}</p>
+      </section>`
+    : "";
   const body = learned.length
     ? learned
         .map((scene) => {
@@ -588,6 +613,8 @@ function renderReview() {
     `<main class="home-grid">
       <div class="actions review-back"><button class="ghost" type="button" data-action="go-home">Back</button></div>
       <h1>Learned</h1>
+      <p>${mastery.scenesKnown} of ${mastery.scenesTotal} scenes · ${words.length} words</p>
+      ${wordBlock}
       ${body}
     </main>`,
     { narrow: true },
@@ -617,8 +644,8 @@ function persist() {
 }
 
 function finishPlacement() {
-  const level = scorePlacement(profile.placementSelf, profile.placementChecks);
-  profile.level = level;
+  scorePlacement(profile.placementSelf, profile.placementChecks);
+  profile.level = 1;
   profile.xp = 0;
   profile.ease = false;
   profile.queued = null;
@@ -664,6 +691,15 @@ const actions = {
     profile = flushStudy(profile);
     profile.screen = "home";
     profile.confirmReset = false;
+    profile = withQueue(profile);
+    persist();
+  },
+  "start-course"() {
+    profile.level = 1;
+    profile.xp = 0;
+    profile.ease = false;
+    profile.screen = "home";
+    profile.queued = null;
     profile = withQueue(profile);
     persist();
   },

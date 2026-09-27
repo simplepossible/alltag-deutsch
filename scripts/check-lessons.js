@@ -5,6 +5,8 @@ import {
   scorePlacement,
   weekRecord,
   learnedScenes,
+  learnedWords,
+  levelMastery,
 } from "../src/engine.js";
 
 const ids = new Set();
@@ -13,7 +15,7 @@ const phraseIds = new Set();
 for (const scene of scenes) {
   if (scene.phrases.length !== 5) throw new Error(`${scene.id} should have 5 phrases`);
   if (scene.checks.length !== 3) throw new Error(`${scene.id} should have 3 checks`);
-  if (scene.level < 1 || scene.level > 4) throw new Error(`${scene.id} bad level`);
+  if (scene.level !== 1) throw new Error(`${scene.id} is outside A1`);
   if (ids.has(scene.id)) throw new Error(`duplicate scene ${scene.id}`);
   ids.add(scene.id);
   for (const phrase of scene.phrases) {
@@ -33,10 +35,7 @@ for (const scene of scenes) {
   }
 }
 
-for (const level of [1, 2, 3, 4]) {
-  const count = scenes.filter((scene) => scene.level === level).length;
-  if (count !== 10) throw new Error(`level ${level} has ${count} scenes`);
-}
+if (scenes.length < 100) throw new Error(`A1 needs at least 100 scenes, got ${scenes.length}`);
 
 function profileAt(level, extra = {}) {
   return {
@@ -51,22 +50,20 @@ function profileAt(level, extra = {}) {
 }
 
 const now = new Date("2026-09-26T12:00:00");
-for (const level of [1, 2, 3, 4]) {
-  const lesson = buildLesson(profileAt(level), { nonce: 0, now });
-  if (lesson.lines.length !== 5) throw new Error("lesson line count");
-  if (lesson.checks.length !== 3) throw new Error("lesson check count");
-  if (lesson.level > level) throw new Error(`scene above learner level ${level}`);
-  const again = buildLesson(profileAt(level), { nonce: 0, now });
-  if (again.id !== lesson.id) throw new Error("lesson should stay stable for the day");
-  for (const check of lesson.checks) {
-    if (check.options.filter((option) => option.correct).length !== 1) {
-      throw new Error("shuffled check lost its answer");
-    }
+const lesson = buildLesson(profileAt(1), { nonce: 0, now });
+if (lesson.lines.length !== 5) throw new Error("lesson line count");
+if (lesson.checks.length !== 3) throw new Error("lesson check count");
+if (lesson.level !== 1) throw new Error("a scene must stay on A1");
+const again = buildLesson(profileAt(1), { nonce: 0, now });
+if (again.id !== lesson.id) throw new Error("lesson should stay stable for the day");
+for (const check of lesson.checks) {
+  if (check.options.filter((option) => option.correct).length !== 1) {
+    throw new Error("shuffled check lost its answer");
   }
 }
 
-const easier = buildLesson(profileAt(3, { ease: true }), { nonce: 1, now });
-if (easier.level !== 2) throw new Error(`ease should step back, got ${easier.level}`);
+const easier = buildLesson(profileAt(1, { ease: true }), { nonce: 1, now });
+if (easier.level !== 1) throw new Error(`A1 has no easier band, got ${easier.level}`);
 
 if (scorePlacement(5, [false, false, false, false, false]) !== 1) {
   throw new Error("failed basics should stay at the start");
@@ -134,28 +131,22 @@ mastering = applySession(mastering, {
   spelledIds: last.lines.map((line) => line.id),
   now: new Date("2026-09-27T12:00:00"),
 }).profile;
-if (mastering.level !== 2) {
-  throw new Error(`knowing every A1 line should move to A2, got ${mastering.level}`);
+if (mastering.level !== 1) {
+  throw new Error(`A1 stays A1 when every line is known, got ${mastering.level}`);
+}
+if (levelMastery(mastering).scenesKnown !== a1.length) {
+  throw new Error("every finished scene should count as learned");
 }
 
-let stuck = profileAt(2);
-const one = buildLesson(stuck, { nonce: 0, now });
-stuck = applySession(stuck, {
-  lesson: one,
-  answers: one.checks.map((check) => ({ checkId: check.id, correct: true })),
-  now,
-}).profile;
-if (stuck.level !== 2) throw new Error("one scene must not move the level");
-
-const shaky = buildLesson(profileAt(2), { nonce: 3, now });
-const mixed = applySession(profileAt(2), {
+const shaky = buildLesson(profileAt(1), { nonce: 3, now });
+const mixed = applySession(profileAt(1), {
   lesson: shaky,
   answers: shaky.checks.map((check, index) => ({ checkId: check.id, correct: index === 0 })),
   now,
 }).profile;
 if (!mixed.ease) throw new Error("a weak scene should lighten the next one");
 const next = buildLesson(mixed, { nonce: 4, now: new Date("2026-09-27T12:00:00") });
-if (next.level !== 1) throw new Error("the lighter scene should be the previous level");
+if (next.level !== 1) throw new Error("the next scene stays on A1");
 
 const week = weekRecord(
   { minutesByDay: { "2026-09-21": 6, "2026-09-26": 12 } },
@@ -174,14 +165,19 @@ if (!sunday.days[6].today || sunday.days[0].key !== "2026-09-21") {
 
 const learned = learnedScenes({
   sessions: [
-    { sceneId: "bakery" },
-    { sceneId: "cafe" },
-    { sceneId: "bakery" },
+    { sceneId: "a1-hello" },
+    { sceneId: "a1-bakery" },
+    { sceneId: "a1-hello" },
   ],
-  phraseStats: { "market-1": { known: true } },
+  phraseStats: { "a1-market-1": { known: true } },
 });
-if (learned.map((scene) => scene.id).join() !== "bakery,cafe,market") {
+if (learned.map((scene) => scene.id).join() !== "a1-hello,a1-bakery,a1-market") {
   throw new Error(`learned scenes should be newest first, got ${learned.map((scene) => scene.id).join()}`);
+}
+
+const words = learnedWords({ phraseStats: { "a1-hello-1": { known: true } } });
+if (!words.includes("guten") || !words.includes("morgen")) {
+  throw new Error(`known lines should count their words, got ${words.join(" ")}`);
 }
 
 console.log(`ok — ${scenes.length} scenes, placement and level movement checked`);
